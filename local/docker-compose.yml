@@ -1,0 +1,32 @@
+services:
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.33.0
+    container_name: weaviate
+    command: ["--host","0.0.0.0","--port","8080","--scheme","http"]
+    ports: ["8080:8080","50051:50051"]
+    restart: on-failure:0
+    entrypoint: ["/entrypoint.sh"]
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      ENABLE_API_BASED_MODULES: "true"
+      ENABLE_MODULES: "text2vec-openai,generative-anthropic"
+      CLUSTER_HOSTNAME: "node1"
+      OPENAI_APIKEY_FILE: /run/secrets/openai_api_key
+      ANTHROPIC_APIKEY_FILE: /run/secrets/anthropic_api_key
+    secrets:
+      - openai_api_key
+      - anthropic_api_key
+    volumes:
+      - ../bin/entrypoint.sh:/entrypoint.sh:ro
+      - weaviate_data:/var/lib/weaviate
+
+secrets:
+  openai_api_key:
+    file: ~/.private/openai.txt
+  anthropic_api_key:
+    file: ~/.private/claude-api-key.txt
+
+volumes:
+  weaviate_data:
