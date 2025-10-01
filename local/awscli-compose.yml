@@ -1,0 +1,11 @@
+services:
+  aws:
+    image: amazon/aws-cli:2.31.0
+    container_name: awscli
+    working_dir: /work
+    entrypoint: ["tail", "-f", "/.dockerenv"]
+
+    volumes:
+      - ~/.private/openai.txt:/work/.private/openai.txt:ro
+      - ~/.aws:/root/.aws
+      - ../bin:/work/bin

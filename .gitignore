@@ -50,3 +50,8 @@ logs
 
 # TypeScript cache
 *.tsbuildinfo
+
+# terraform
+terraform.tfstate
+terraform.tfstate.backup
+.terraform.lock.hcl

@@ -1,0 +1,85 @@
+#!/bin/bash
+set -euxo pipefail
+
+# --- Packages ---
+dnf -y update
+dnf -y install docker awscli
+
+mkdir -p /usr/libexec/docker/cli-plugins
+curl -fsSL -o /usr/libexec/docker/cli-plugins/docker-compose \
+  "https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-linux-x86_64"
+chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+ln -sf /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+
+systemctl enable --now docker
+
+# Allow ec2-user to run docker without sudo (optional)
+if id ec2-user >/dev/null 2>&1; then
+  usermod -aG docker ec2-user || true
+fi
+
+# --- Directories ---
+mkdir -p /var/lib/weaviate
+chmod 755 /var/lib/weaviate
+
+mkdir -p /opt/weaviate/secrets
+chmod 700 /opt/weaviate/secrets
+
+# --- Entrypoint wrapper (exports OPENAI_APIKEY if present) ---
+cat >/opt/weaviate/entrypoint.sh <<'EOS'
+#!/bin/sh
+set -e
+if [ -f /run/secrets/openai_api_key ]; then
+  export OPENAI_APIKEY="$(cat /run/secrets/openai_api_key)"
+elif [ -f /opt/weaviate/secrets/openai_api_key.txt ]; then
+  export OPENAI_APIKEY="$(cat /opt/weaviate/secrets/openai_api_key.txt)"
+fi
+exec /bin/weaviate "$@"
+EOS
+chmod 755 /opt/weaviate/entrypoint.sh
+
+# --- Docker Compose file ---
+cat >/opt/weaviate/docker-compose.yml <<'EOS'
+version: "3.8"
+services:
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.33.0
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    restart: on-failure:0
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      QUERY_DEFAULTS_LIMIT: "25"
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      CLUSTER_HOSTNAME: "node1"
+      # Will be uncommented below if ENABLE_OPENAI_MODULE=true:
+      # ENABLE_API_BASED_MODULES: "true"
+      # ENABLE_MODULES: "text2vec-openai"
+    volumes:
+      - /var/lib/weaviate:/var/lib/weaviate
+      - /opt/weaviate/entrypoint.sh:/entrypoint.sh:ro
+      - /opt/weaviate/secrets:/opt/weaviate/secrets:ro
+    entrypoint: ["/entrypoint.sh"]
+    command: ["--host","0.0.0.0","--port","8080","--scheme","http"]
+EOS
+
+# --- Pull OpenAI key from Secrets Manager (if ARN provided) ---
+SECRET_ARN="${OPENAI_SECRET_ARN}"
+if [ -n "$SECRET_ARN" ]; then
+  aws secretsmanager get-secret-value --secret-id "$SECRET_ARN" \
+    --query 'SecretString' --output text > /opt/weaviate/secrets/openai_api_key.txt
+  chmod 600 /opt/weaviate/secrets/openai_api_key.txt
+fi
+
+# --- Toggle OpenAI module if requested ---
+if [ "${ENABLE_OPENAI_MODULE}" = "true" ]; then
+  sed -i 's/# ENABLE_API_BASED_MODULES/ENABLE_API_BASED_MODULES/' /opt/weaviate/docker-compose.yml
+  sed -i 's/# ENABLE_MODULES/ENABLE_MODULES/' /opt/weaviate/docker-compose.yml
+fi
+
+# --- Bring up Weaviate ---
+cd /opt/weaviate
+# Use Compose v2 via 'docker compose'
+docker compose version
+docker compose up -d
