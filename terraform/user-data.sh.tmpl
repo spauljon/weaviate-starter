@@ -40,7 +40,6 @@ chmod 755 /opt/weaviate/entrypoint.sh
 
 # --- Docker Compose file ---
 cat >/opt/weaviate/docker-compose.yml <<'EOS'
-version: "3.8"
 services:
   weaviate:
     image: cr.weaviate.io/semitechnologies/weaviate:1.33.0
@@ -62,7 +61,12 @@ services:
       - /opt/weaviate/secrets:/opt/weaviate/secrets:ro
     entrypoint: ["/entrypoint.sh"]
     command: ["--host","0.0.0.0","--port","8080","--scheme","http"]
-EOS
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20sEOS
 
 # --- Pull OpenAI key from Secrets Manager (if ARN provided) ---
 SECRET_ARN="${OPENAI_SECRET_ARN}"

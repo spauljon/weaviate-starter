@@ -51,6 +51,12 @@ locals {
     tolist(data.aws_subnets.any[0].ids)[0]
   )
   ssh_cidr = var.ssh_allowed_cidr != "" ? var.ssh_allowed_cidr : var.allowed_cidr
+
+  nlb_subnets = distinct(concat(
+    var.private_subnet_ids,
+    [var.subnet_id]
+  ))
+
 }
 
 # --- Get details of chosen subnet ---
@@ -74,6 +80,14 @@ resource "aws_security_group" "weaviate_sg" {
   name        = "${var.name_prefix}-sg"
   description = "Allow 8080 from allowed CIDR; optional SSH"
   vpc_id      = data.aws_vpc.default.id
+
+  ingress {
+    description = "Weaviate (intra-VPC)"
+    from_port   = var.weaviate_port
+    to_port     = var.weaviate_port
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr_for_sg]
+  }
 
   ingress {
     description = "Weaviate"
