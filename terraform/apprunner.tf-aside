@@ -1,0 +1,163 @@
+############################################
+# IAM ROLES
+############################################
+
+# App Runner pulls from ECR with this access role
+data "aws_iam_policy" "apprunner_ecr_access" {
+  arn = "arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess"
+}
+
+resource "aws_iam_role" "apprunner_access_role" {
+  name = "${var.name_prefix}-apprunner-ecr-access"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = { Service = "build.apprunner.amazonaws.com" },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "apprunner_attach_ecr" {
+  role       = aws_iam_role.apprunner_access_role.name
+  policy_arn = data.aws_iam_policy.apprunner_ecr_access.arn
+}
+
+# Runtime role for the container (Bedrock + optional secrets)
+resource "aws_iam_role" "apprunner_instance_role" {
+  name = "${var.name_prefix}-apprunner-instance"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = { Service = "tasks.apprunner.amazonaws.com" },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "apprunner_instance_inline" {
+  name = "${var.name_prefix}-apprunner-instance-inline"
+  role = aws_iam_role.apprunner_instance_role.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid: "BedrockConverse",
+        Effect: "Allow",
+        Action: ["bedrock:Converse", "bedrock:InvokeModel"],
+        Resource: "arn:aws:bedrock:${var.region}::foundation-model/${var.bedrock_model_id}"
+      }
+      # Uncomment if you later read secrets/params at runtime:
+      #,{
+      #  "Sid": "ReadParameters",
+      #  "Effect": "Allow",
+      #  "Action": ["ssm:GetParameter", "ssm:GetParameters"],
+      #  "Resource": "arn:aws:ssm:${var.region}:*:parameter/*"
+      #},{
+      #  "Sid": "ReadSecrets",
+      #  "Effect": "Allow",
+      #  "Action": ["secretsmanager:GetSecretValue"],
+      #  "Resource": "*"
+      #}
+    ]
+  })
+}
+
+############################################
+# VPC CONNECTOR + SECURITY
+############################################
+
+# Security group for the VPC Connector ENIs
+resource "aws_security_group" "apprunner_connector_sg" {
+  name        = "${var.name_prefix}-apprunner-connector-sg"
+  description = "ENIs for App Runner VPC Connector"
+  vpc_id      = data.aws_vpc.default.id
+
+  # Allow all egress; we’ll restrict at Weaviate SG side
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.name_prefix}-apprunner-connector-sg" }
+}
+
+# Allow the connector ENIs to reach Weaviate:8080 (keeps your existing CIDR rule too)
+resource "aws_security_group_rule" "weaviate_ingress_from_connector" {
+  type                     = "ingress"
+  from_port                = 8080
+  to_port                  = 8080
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.weaviate_sg.id
+  source_security_group_id = aws_security_group.apprunner_connector_sg.id
+}
+
+# App Runner VPC Connector (uses the same chosen subnet you already computed)
+resource "aws_apprunner_vpc_connector" "weaviate_agent" {
+  vpc_connector_name = "${var.name_prefix}-apprunner-vpc"
+  subnets            = [data.aws_subnet.chosen.id]
+  security_groups    = [aws_security_group.apprunner_connector_sg.id]
+}
+
+############################################
+# APP RUNNER SERVICE
+############################################
+
+resource "aws_apprunner_service" "weaviate_agent" {
+  service_name = "${var.name_prefix}-agent"
+
+  source_configuration {
+    authentication_configuration {
+      access_role_arn = aws_iam_role.apprunner_access_role.arn
+    }
+
+    image_repository {
+      image_repository_type = "ECR"
+      image_identifier      = "${var.ecr_repo_uri}:${var.image_tag}"
+
+      image_configuration {
+        port = "8081"
+
+        runtime_environment_variables = {
+          AWS_REGION          = var.region
+          BEDROCK_MODEL_ID    = var.bedrock_model_id
+          # Use EC2 private IP for in-VPC access
+          WEAVIATE_HOST       = "${aws_instance.weaviate.private_ip}:8080"
+          WEAVIATE_SCHEME     = var.weaviate_scheme
+          WEAVIATE_CLASS      = "Document"
+          WEAVIATE_TEXT_FIELD = "text"
+          # WEAVIATE_API_KEY  = "use Secrets/SSM in prod"
+        }
+      }
+    }
+  }
+
+  instance_configuration {
+    cpu               = "1 vCPU"
+    memory            = "2 GB"
+    instance_role_arn = aws_iam_role.apprunner_instance_role.arn
+  }
+
+  health_check_configuration {
+    protocol            = "HTTP"
+    path                = "/health"
+    healthy_threshold   = 1
+    unhealthy_threshold = 5
+    interval            = 10
+    timeout             = 5
+  }
+
+  network_configuration {
+    egress_configuration {
+      egress_type       = "VPC"
+      vpc_connector_arn = aws_apprunner_vpc_connector.weaviate_agent.arn
+    }
+    ingress_configuration {
+      is_publicly_accessible = var.app_runner_public
+    }
+  }
+}

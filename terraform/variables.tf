@@ -61,3 +61,61 @@ variable "availability_zone" {
   type        = string
   default     = ""
 }
+
+# App Runner / container image
+variable "ecr_repo_uri" {
+  description = "ECR repo URI for the agent image (e.g., 123456789012.dkr.ecr.us-east-1.amazonaws.com/weaviate-agent)"
+  type        = string
+}
+
+variable "image_tag" {
+  description = "Container image tag to deploy"
+  type        = string
+  default     = "latest"
+}
+
+variable "bedrock_model_id" {
+  description = "Bedrock model ID (e.g., anthropic.claude-3-5-haiku-20241022-v1:0)"
+  type        = string
+}
+
+variable "weaviate_scheme" {
+  description = "http or https to reach EC2 Weaviate"
+  type        = string
+  default     = "http"
+}
+
+variable "app_runner_public" {
+  description = "Whether App Runner should expose a public HTTPS URL"
+  type        = bool
+  default     = true
+}
+
+variable "private_subnet_ids" {
+  description = "Private subnet IDs for the internal NLB (min 2 AZs recommended)"
+  type        = list(string)
+  default     = []
+}
+
+variable "weaviate_port" {
+  description = "Weaviate listen port"
+  type        = number
+  default     = 8080
+}
+
+variable "private_zone_name" {
+  description = "Private hosted zone FQDN for internal service discovery (e.g., internal.example.com)"
+  type        = string
+}
+
+variable "weaviate_internal_hostname" {
+  description = "Hostname to create inside the private zone (e.g., weaviate)"
+  type        = string
+  default     = "weaviate"
+}
+
+variable "vpc_cidr_for_sg" {
+  description = "VPC CIDR used to allow NLB->instance traffic on the target SG (because NLB preserves source IP)"
+  type        = string
+}
+

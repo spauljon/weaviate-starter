@@ -1,15 +1,4 @@
 services:
-  aws:
-    image: amazon/aws-cli:2.31.0
-    container_name: awscli
-    working_dir: /work
-    entrypoint: ["tail", "-f", "/.dockerenv"]
-
-    volumes:
-      - ~/.private/openai.txt:/work/.private/openai.txt:ro
-      - ~/.aws:/root/.aws
-      - ../bin/setApiKeySecret.sh:/work/bin/setApiKeySecret.sh:ro
-
   weaviate:
     image: cr.weaviate.io/semitechnologies/weaviate:1.33.0
     container_name: weaviate
@@ -30,7 +19,7 @@ services:
       - openai_api_key
       - anthropic_api_key
     volumes:
-      - ../bin/entrypoint.sh:/entrypoint.sh:ro
+      - ../../bin/entrypoint.sh:/entrypoint.sh:ro
       - weaviate_data:/var/lib/weaviate
 
 secrets:

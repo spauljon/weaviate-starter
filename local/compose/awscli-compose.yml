@@ -8,4 +8,4 @@ services:
     volumes:
       - ~/.private/openai.txt:/work/.private/openai.txt:ro
       - ~/.aws:/root/.aws
-      - ../bin:/work/bin
+      - ../../bin:/work/bin

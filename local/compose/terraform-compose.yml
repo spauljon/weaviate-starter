@@ -4,7 +4,7 @@ services:
     container_name: tf
     working_dir: /workspace
     volumes:
-      - ../terraform/:/workspace:rw
+      - ../../terraform/:/workspace:rw
       - tfstate:/workspace/.terraform
       - tfplugin-cache:/root/.terraform.d/plugin-cache
       - ${HOME}/.aws:/root/.aws:ro
