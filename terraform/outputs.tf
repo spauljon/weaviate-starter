@@ -24,10 +24,10 @@ output "weaviate_url" {
   description = "Weaviate base URL"
 }
 
-output "app_runner_service_url" {
-  value       = aws_apprunner_service.weaviate_agent.service_url
-  description = "Public HTTPS URL for the agent (if is_publicly_accessible = true)"
-}
+# output "app_runner_service_url" {
+#   value       = aws_apprunner_service.weaviate_agent.service_url
+#   description = "Public HTTPS URL for the agent (if is_publicly_accessible = true)"
+# }
 
 output "weaviate_internal_fqdn" {
   description = "Internal DNS name to use for Weaviate"

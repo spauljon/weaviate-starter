@@ -54,7 +54,7 @@ locals {
 
   nlb_subnets = distinct(concat(
     var.private_subnet_ids,
-    [var.subnet_id]
+    [local.chosen_subnet_id]
   ))
 
 }

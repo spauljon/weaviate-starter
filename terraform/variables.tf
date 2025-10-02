@@ -63,8 +63,8 @@ variable "availability_zone" {
 }
 
 # App Runner / container image
-variable "ecr_repo_url" {
-  description = "ECR repo URL for the agent image (e.g., 123456789012.dkr.ecr.us-east-1.amazonaws.com/weaviate-agent)"
+variable "ecr_repo_uri" {
+  description = "ECR repo URI for the agent image (e.g., 123456789012.dkr.ecr.us-east-1.amazonaws.com/weaviate-agent)"
   type        = string
 }
 
@@ -74,14 +74,11 @@ variable "image_tag" {
   default     = "latest"
 }
 
-# Bedrock model used by your agent
 variable "bedrock_model_id" {
   description = "Bedrock model ID (e.g., anthropic.claude-3-5-haiku-20241022-v1:0)"
   type        = string
-  default     = "anthropic.claude-3-5-haiku-20241022-v1:0"
 }
 
-# Optional runtime config for the agent
 variable "weaviate_scheme" {
   description = "http or https to reach EC2 Weaviate"
   type        = string
@@ -94,19 +91,10 @@ variable "app_runner_public" {
   default     = true
 }
 
-variable "vpc_id" {
-  description = "VPC ID where Weaviate runs"
-  type        = string
-}
-
 variable "private_subnet_ids" {
   description = "Private subnet IDs for the internal NLB (min 2 AZs recommended)"
   type        = list(string)
-}
-
-variable "weaviate_instance_id" {
-  description = "EC2 instance ID running Weaviate (registered in the target group)"
-  type        = string
+  default     = []
 }
 
 variable "weaviate_port" {
@@ -124,12 +112,6 @@ variable "weaviate_internal_hostname" {
   description = "Hostname to create inside the private zone (e.g., weaviate)"
   type        = string
   default     = "weaviate"
-}
-
-variable "create_private_zone" {
-  description = "Create the Route 53 private hosted zone if it does not exist"
-  type        = bool
-  default     = false
 }
 
 variable "vpc_cidr_for_sg" {

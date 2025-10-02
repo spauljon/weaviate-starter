@@ -117,7 +117,7 @@ resource "aws_apprunner_service" "weaviate_agent" {
 
     image_repository {
       image_repository_type = "ECR"
-      image_identifier      = "${var.ecr_repo_url}:${var.image_tag}"
+      image_identifier      = "${var.ecr_repo_uri}:${var.image_tag}"
 
       image_configuration {
         port = "8081"
